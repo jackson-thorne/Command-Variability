@@ -10,6 +10,28 @@ Planning to analyze a Lyapunov's exponent for mechanics at each segment for ever
 Look to quantify repeatability vs adaptability
 This will ideally show how much repeatability or adaptability a pitcher needs, quantifying command will ideally outline where exactly command is being negatively impacted to make improvements, or what a pitcher does well.
 
+This project takes command research from our Theia markerless biomechanics data and only uses pitchers who were throwing a command focused bullpen. Then the matching command results using our intended zones will show the result of each pitch. Here is the code to filter to only the command bullpens that we are looking for: 
+SELECT trials.filename, trials.iz_trackman_pitch_id, trials.pulse_event_id, trials.handedness, sessions.height_meters, sessions.mass_kilograms, trials.session_trial
+FROM trials
+LEFT JOIN sessions ON sessions.session = trials.session
+WHERE trials.tag IN ("iz", "IZ")
+SELECT izd.*, pitches.id AS pitch_id FROM pitches
+                    LEFT JOIN pitch_meta_data pmd ON pmd.id = pitches.pitch_meta_data_id
+                    LEFT JOIN intended_zone_data izd ON izd.id = pitches.intended_zone_data_id
+                    WHERE pitches.datetime_utc > '2024-12-01 00:00:00' AND pmd.pitch_type_id = 1
+This should give you all of the session_trials that are needed in the biomech db, and all of the intended zones data. Can merge the IZ data onto the trials data and then only pull biomech data for those specific trials.
+7:59
+here's some python code that will pair and get the right time series biomech data
+command_theia_df['iz_trackman_pitch_id'] = command_theia_df['iz_trackman_pitch_id'].apply(lambda x: int(float(x)) if pd.notna(x) else x)
+iz_poi_df = pd.merge(command_theia_df, iz_df, left_on='iz_trackman_pitch_id', right_on='pitch_id', how='left')
+session_trial_list = ", ".join([f"'{str(x)}'" for x in iz_poi_df['session_trial'].unique()])
+
+time_series_query = f"""SELECT * FROM joint_angles
+LEFT JOIN joint_velos ON joint_velos.velo_id = joint_angles.angle_id
+WHERE joint_angles.session_trial IN ({session_trial_list})"""
+
+time_series_df = pd.read_sql(time_series_query, cnx)
+
 Full Roadmap From O3
 Below is an end-to-end technical roadmap you can hand directly to Cursor (or any modern code-gen IDE) to stand up the entire “Chaos-Theory Command” project from raw Driveline data to actionable results. 
 
